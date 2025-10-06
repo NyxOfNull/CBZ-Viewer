@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini CBZ Viewer (Long Strip)</title>
+    <!-- Load Tailwind CSS for styling -->
+    <link href="CSS/tailwind.min.css" rel="stylesheet">
+    <!-- Load JSZip from local file path -->
+    <script src="JS/jszip.min.js"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            /* Allow the body to scroll normally, no fixed height */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+            margin: 0;
+            padding: 0;
+        }
+        /* Header and Footer flow naturally with content scroll */
+        
+        /* Hide the initial file input button and style its label */
+        #fileInput {
+            display: none;
+        }
+        /* Styles for images within the long strip */
+        .comic-page-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1rem; /* Space between pages in the strip */
+            border-radius: 0.5rem;
+        }
+        /* Styles for interactive buttons and dropdowns */
+        .control-button {
+            @apply px-4 py-2 font-bold rounded-full transition duration-150 ease-in-out whitespace-nowrap;
+            @apply bg-gray-700 text-white hover:bg-gray-600 active:bg-gray-500 shadow-xl;
+        }
+        .chapter-select {
+             @apply p-2 bg-gray-800 text-white rounded-lg border border-gray-600 cursor-pointer w-48 transition duration-150 ease-in-out;
+             @apply focus:ring-2 focus:ring-purple-500 focus:border-purple-500;
+        }
+        /* Key: Set the viewer wrapper to relative positioning for accurate height calculation and remove overflow:hidden
+           since we are now controlling height via JavaScript. */
+        #viewerWrapper {
+            position: relative; 
+            /* Min-height prevents it from collapsing to 0 before content loads */
+            min-height: 100px;
+            /* Transition helps smooth out the height changes on zoom */
+            transition: height 0.15s ease-out; 
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Loading Indicator -->
+    <div id="loadingMessage" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden z-50">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500"></div>
+            <p class="mt-4 text-xl">Loading CBZ file...</p>
+        </div>
+    </div>
+
+    <!-- Header and File Input -->
+    <!-- The header will scroll off-screen as the user scrolls down -->
+    <header id="header" class="w-full text-center p-4 bg-black/80 z-20 shadow-lg">
+        <h1 class="text-3xl font-extrabold text-purple-400 mb-2">Comic Book Viewer (Long Strip)</h1>
+        <p id="currentFileTitle" class="text-sm text-gray-400 h-6">Please select your CBZ folder.</p>
+        <!-- The 'webkitdirectory' attribute enables folder selection -->
+        <label for="fileInput" class="control-button cursor-pointer mt-4 inline-block">
+            Select Folder Containing CBZ Files
+        </label>
+        <input type="file" id="fileInput" multiple accept=".cbz,.cbr" webkitdirectory directory>
+        
+        <!-- Chapter Selector (Top) -->
+        <div id="chapterSelectTopContainer" class="mt-4 flex justify-center invisible">
+            <select id="chapterSelectTop" class="chapter-select"></select>
+        </div>
+    </header>
+
+    <!-- Main Viewer Area - Container for content that is part of the overall page scroll -->
+    <main id="viewerArea" class="flex-grow w-full max-w-6xl mx-auto relative">
+        <p id="initialMessage" class="absolute inset-0 flex items-center justify-center text-gray-500 text-lg z-10 pointer-events-none">Click the button above to begin.</p>
+        
+        <!-- WRAPPER: This container's height is now managed by JS to ensure layout size matches visual size -->
+        <div id="viewerWrapper">
+            <!-- This container holds all comic pages and receives the overall zoom transform -->
+            <div id="viewerContent" class="min-h-full flex flex-col items-center p-4 md:p-8" 
+                 style="transform: scale(1.0); transform-origin: top center; transition: transform 0.15s ease-out; visibility: hidden;">
+                <!-- Comic pages will be loaded here as a long strip -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Controls Panel (CBZ Navigation Only) -->
+    <!-- This footer flows naturally after the comic content (viewerArea) -->
+    <footer id="controls" class="w-full p-4 bg-black/80 shadow-2xl z-20">
+        <div class="w-full max-w-6xl mx-auto flex justify-center items-center">
+
+            <!-- CBZ Navigation (Center: PREV, Dropdown, NEXT) -->
+            <div id="cbzNavigation" class="flex items-center space-x-3 invisible">
+                <button id="prevCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>PREV CBZ</button>
+                <select id="chapterSelectBottom" class="chapter-select"></select>
+                <button id="nextCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>NEXT CBZ</button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Fixed Zoom Controls (New Element for always-visible zoom buttons) -->
+    <div id="fixedZoomControls" class="fixed bottom-4 left-4 z-40">
+        <div id="zoomControls" class="flex space-x-3">
+            <button id="zoomOutBtn" class="control-button text-2xl" disabled>-</button>
+            <button id="zoomInBtn" class="control-button text-2xl" disabled>+</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State Variables ---
+        let allCbzFiles = []; // Array of File objects selected by the user
+        let cbzIndex = -1;     // Index of the currently loaded CBZ file
+        let cbzPages = [];    // Array of base64 data URLs for the current CBZ
+        let zoomLevel = 1.0;  // Current zoom scale factor (1.0 = 100%)
+        let unscaledContentHeight = 0; // Stores the height of content at zoomLevel 1.0
+
+        // --- DOM Elements ---
+        const fileInput = document.getElementById('fileInput');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const initialMessage = document.getElementById('initialMessage');
+        const viewerArea = document.getElementById('viewerArea'); 
+        const viewerContent = document.getElementById('viewerContent'); 
+        const viewerWrapper = document.getElementById('viewerWrapper'); // Get the wrapper element
+
+        // Zoom buttons are now in a fixed container, but the IDs remain the same
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        
+        const prevCbzBtn = document.getElementById('prevCbzBtn');
+        const nextCbzBtn = document.getElementById('nextCbzBtn');
+        const cbzNavigation = document.getElementById('cbzNavigation');
+
+        const chapterSelectTop = document.getElementById('chapterSelectTop');
+        const chapterSelectBottom = document.getElementById('chapterSelectBottom');
+        const chapterSelectTopContainer = document.getElementById('chapterSelectTopContainer');
+        
+        const header = document.getElementById('header');
+        const controls = document.getElementById('controls');
+
+
+        // --- Utility Functions ---
+
+        /**
+         * Natural sorting function for File objects based on their name property.
+         * Used for sorting the list of CBZ files.
+         */
+        function sortFilesByName(a, b) {
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        }
+
+        /**
+         * Natural sorting function for plain strings (like image filenames).
+         * Used for sorting images inside a CBZ file.
+         */
+        function sortStringsNumerically(a, b) {
+            return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+        }
+
+
+        /**
+         * Clears all state and UI for a fresh start.
+         */
+        function resetViewer() {
+            allCbzFiles = [];
+            cbzIndex = -1;
+            cbzPages = [];
+            zoomLevel = 1.0;
+            unscaledContentHeight = 0;
+
+            initialMessage.classList.remove('hidden');
+            viewerContent.innerHTML = ''; // Clear images
+            viewerContent.style.visibility = 'hidden';
+            viewerWrapper.style.height = ''; // Reset wrapper height
+            currentFileTitle.textContent = 'Please select your CBZ folder.';
+            
+            // Disable all controls
+            [zoomInBtn, zoomOutBtn, prevCbzBtn, nextCbzBtn].forEach(btn => btn.disabled = true);
+            cbzNavigation.classList.add('invisible');
+            chapterSelectTopContainer.classList.add('invisible');
+            applyZoom(); // Reset zoom level visually
+        }
+        
+        /**
+         * Calculates the total content height and adjusts the wrapper's height
+         * to match the visually scaled size. This is the core fix.
+         */
+        function updateContainerHeight() {
+            if (unscaledContentHeight === 0) {
+                // This happens if loadCbz hasn't run yet.
+                return;
+            }
+
+            // Calculate the new height based on the current zoom level
+            // We use 40px (p-4) or 64px (md:p-8) for the viewerContent's vertical padding (top and bottom).
+            const verticalPadding = 64; 
+            const scaledHeight = (unscaledContentHeight * zoomLevel) + verticalPadding;
+            
+            // Apply the calculated height to the wrapper to limit the layout space
+            viewerWrapper.style.height = `${scaledHeight}px`; 
+        }
+
+
+        /**
+         * Shows the loading overlay.
+         */
+        function showLoading(message = 'Loading CBZ file...') {
+            loadingMessage.querySelector('p').textContent = message;
+            loadingMessage.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the loading overlay.
+         */
+        function hideLoading() {
+            loadingMessage.classList.add('hidden');
+        }
+
+        /**
+         * Maps common image file extensions to their MIME types.
+         */
+        function getMimeType(filename) {
+            const lower = filename.toLowerCase();
+            if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+            if (lower.endsWith('.png')) return 'image/png';
+            if (lower.endsWith('.gif')) return 'image/gif';
+            if (lower.endsWith('.webp')) return 'image/webp';
+            return null;
+        }
+
+        /**
+         * Updates the transform on the viewerContent container (the long strip) for full-page zoom.
+         */
+        function applyZoom() {
+            // Apply scale transformation to the inner content container
+            viewerContent.style.transform = `scale(${zoomLevel})`;
+            
+            // CRITICAL FIX: Update the container's layout height to match the visual scale.
+            if (cbzPages.length > 0) {
+                 updateContainerHeight();
+            }
+        }
+
+        /**
+         * Populates the chapter selection dropdowns with the names of all loaded CBZ files.
+         */
+        function populateChapterDropdowns() {
+            const dropdowns = [chapterSelectTop, chapterSelectBottom];
+            dropdowns.forEach(dropdown => {
+                dropdown.innerHTML = ''; // Clear previous options
+                allCbzFiles.forEach((file, index) => {
+                    const option = document.createElement('option');
+                    // Display only the file name
+                    option.textContent = file.name; 
+                    // Store the index as the value for easy navigation
+                    option.value = index; 
+                    dropdown.appendChild(option);
+                });
+            });
+        }
+
+        /**
+         * Updates the state of CBZ navigation and zoom buttons.
+         */
+        function updateUIControls() {
+            // Zoom controls are always active when a file is loaded
+            zoomInBtn.disabled = false;
+            zoomOutBtn.disabled = false;
+
+            // CBZ Navigation and Dropdowns
+            if (allCbzFiles.length > 0) {
+                // Show controls if at least one file is loaded
+                cbzNavigation.classList.remove('invisible');
+                chapterSelectTopContainer.classList.remove('invisible');
+                
+                // Add padding to viewerArea so the comic content isn't flush with the header/footer scroll position
+                viewerArea.classList.add('pt-4', 'pb-4'); 
+                
+                // If only one file, disable PREV/NEXT buttons
+                if (allCbzFiles.length === 1) {
+                    prevCbzBtn.disabled = true;
+                    nextCbzBtn.disabled = true;
+                } else {
+                    // Enable/Disable PREV/NEXT based on current index
+                    prevCbzBtn.disabled = cbzIndex <= 0;
+                    nextCbzBtn.disabled = cbzIndex >= allCbzFiles.length - 1;
+                }
+            } else {
+                cbzNavigation.classList.add('invisible');
+                chapterSelectTopContainer.classList.add('invisible');
+                viewerArea.classList.remove('pt-4', 'pb-4'); 
+            }
+
+            // Sync dropdowns to current file
+            if (cbzIndex !== -1) {
+                chapterSelectTop.value = cbzIndex;
+                chapterSelectBottom.value = cbzIndex;
+            }
+        }
+
+        // --- Core Application Logic ---
+
+        /**
+         * Navigates to the next or previous CBZ file.
+         * @param {number} direction - 1 for next, -1 for previous.
+         */
+        async function navigateCbz(direction) {
+            const newCbzIndex = cbzIndex + direction;
+            if (newCbzIndex >= 0 && newCbzIndex < allCbzFiles.length) {
+                // Scroll back to the top of the page (body scroll) before loading the new file
+                window.scrollTo(0, 0);
+                await loadCbz(newCbzIndex);
+            }
+        }
+
+        /**
+         * Increases or decreases the image zoom level by 10%.
+         * @param {number} factor - 0.1 for zoom in, -0.1 for zoom out.
+         */
+        function updateZoom(factor) {
+            // Limit zoom between 20% and 300%
+            zoomLevel = Math.max(0.2, Math.min(3.0, zoomLevel + factor)); 
+            applyZoom();
+        }
+
+        /**
+         * Loads and processes the images from a single CBZ (zip) file as a long strip.
+         * @param {number} index - Index in the allCbzFiles array.
+         */
+        async function loadCbz(index) {
+            if (index < 0 || index >= allCbzFiles.length) return;
+
+            cbzIndex = index;
+            const file = allCbzFiles[cbzIndex];
+            
+            showLoading(`Reading ${file.name}...`);
+            currentFileTitle.textContent = file.name;
+            viewerContent.innerHTML = ''; // Clear previous images
+            viewerContent.style.visibility = 'hidden';
+            initialMessage.classList.add('hidden');
+            viewerWrapper.style.height = '100px'; // Set temporary height while loading
+
+            try {
+                // 1. Load the CBZ file using JSZip
+                const zip = await JSZip.loadAsync(file);
+                const pagePromises = [];
+
+                // 2. Filter and sort image entries numerically
+                const imageEntries = Object.keys(zip.files)
+                    .filter(filename => !zip.files[filename].dir && getMimeType(filename))
+                    .sort(sortStringsNumerically); 
+
+                if (imageEntries.length === 0) {
+                    throw new Error("No readable image files found in this CBZ.");
+                }
+
+                // 3. Extract all images as Data URLs concurrently
+                for (const filename of imageEntries) {
+                    const mimeType = getMimeType(filename);
+                    if (mimeType) {
+                        pagePromises.push(zip.files[filename].async("blob").then(blob => {
+                            return new Promise(resolve => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result);
+                                reader.readAsDataURL(blob);
+                            });
+                        }));
+                    }
+                }
+
+                cbzPages = await Promise.all(pagePromises);
+
+                // 4. Insert all pages into the long strip container
+                let imageLoadPromises = [];
+                cbzPages.forEach((dataUrl, i) => {
+                    const img = document.createElement('img');
+                    img.src = dataUrl;
+                    img.alt = `Page ${i + 1}`;
+                    img.classList.add('w-full', 'comic-page-image'); 
+                    viewerContent.appendChild(img);
+                    
+                    // Wait for all images to fully load before calculating height
+                    imageLoadPromises.push(new Promise(resolve => {
+                        img.onload = resolve;
+                        img.onerror = resolve; // Resolve even on error to prevent being stuck
+                    }));
+                });
+                
+                // Wait for all images to load
+                await Promise.all(imageLoadPromises);
+                
+                // Calculate and store the true unscaled height after all images are in the DOM and loaded
+                // We temporarily set zoom to 1.0 to get the true scrollHeight
+                viewerContent.style.transform = 'scale(1.0)';
+                // Get the total height of all content (scrollHeight)
+                unscaledContentHeight = viewerContent.scrollHeight; 
+
+                // 5. Reset zoom and update UI
+                zoomLevel = 1.0;
+                applyZoom(); // This now calls updateContainerHeight to set the wrapper's height
+                viewerContent.style.visibility = 'visible';
+                updateUIControls();
+
+            } catch (error) {
+                currentFileTitle.textContent = `Error loading ${file.name}: ${error.message}`;
+                console.error("CBZ Loading Error:", error);
+                cbzPages = [];
+                resetViewer(); // Reset state on error
+                initialMessage.classList.remove('hidden');
+
+            } finally {
+                hideLoading();
+            }
+        }
+
+        /**
+         * Event handler for the file input change.
+         */
+        function handleFolderSelection(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) {
+                resetViewer();
+                return;
+            }
+
+            // Filter for CBZ files and apply NATURAL SORTING to ensure correct chapter order (e.g., 1, 2, 10 instead of 1, 10, 2)
+            allCbzFiles = files
+                .filter(file => file.name.toLowerCase().endsWith('.cbz') || file.name.toLowerCase().endsWith('.cbr'))
+                .sort(sortFilesByName); 
+
+            if (allCbzFiles.length === 0) {
+                currentFileTitle.textContent = "No .cbz or .cbr files selected. Please try again.";
+                resetViewer();
+                return;
+            }
+
+            // Populate the dropdowns with the now-sorted list
+            populateChapterDropdowns();
+
+            // Start with the first CBZ file and scroll to top
+            window.scrollTo(0, 0); 
+            loadCbz(0);
+        }
+
+        // --- Event Listeners ---
+
+        fileInput.addEventListener('change', handleFolderSelection);
+        
+        // CBZ navigation events (PREV/NEXT file)
+        prevCbzBtn.addEventListener('click', () => navigateCbz(-1));
+        nextCbzBtn.addEventListener('click', () => navigateCbz(1));
+
+        // Chapter Selection Dropdown events
+        chapterSelectTop.addEventListener('change', (e) => {
+            const index = parseInt(e.target.value, 10);
+            if (index !== cbzIndex) {
+                loadCbz(index);
+            }
+        });
+        chapterSelectBottom.addEventListener('change', (e) => {
+            const index = parseInt(e.target.value, 10);
+            if (index !== cbzIndex) {
+                loadCbz(index);
+            }
+        });
+
+        // Zoom controls
+        zoomInBtn.addEventListener('click', () => updateZoom(0.1));
+        zoomOutBtn.addEventListener('click', () => updateZoom(-0.1));
+
+        // Initial setup
+        resetViewer();
+    </script>
+</body>
+</html>
