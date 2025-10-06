@@ -43,13 +43,13 @@ You must manually download the full, minified version of the Tailwind CSS styles
 
 Your final directory structure should look like this:
 
-<pre> ``` 
+<pre>
   /Your-Project-Folder 
   ├── index.html 
   ├── CSS 
   │   └── tailwind.min.css
   └── JS 
-      └── jszip.min.js ``` </pre>
+      └── jszip.min.js </pre>
 
 
 ### 2. Run the Viewer
