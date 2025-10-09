@@ -9,51 +9,193 @@
     <!-- Load JSZip from local file path -->
     <script src="JS/jszip.min.js"></script>
     <style>
-        /* Custom styles */
+        /* Import professional fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+        /* Custom styles with enhanced color palette and professional look */
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #000;
-            /* Allow the body to scroll normally, no fixed height */
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow-x: hidden; /* Prevent horizontal scrolling */
+            overflow-x: hidden;
             margin: 0;
             padding: 0;
+            color: #e2e8f0;
         }
-        /* Header and Footer flow naturally with content scroll */
-        
+
+        /* Header and Footer with glassmorphism effect */
+        #header, #controls {
+            backdrop-filter: blur(10px);
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        #controls {
+            border-top: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
         /* Hide the initial file input button and style its label */
         #fileInput {
             display: none;
         }
+
         /* Styles for images within the long strip */
         .comic-page-image {
             max-width: 100%;
             height: auto;
             display: block;
             object-fit: contain;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            margin-bottom: 1rem; /* Space between pages in the strip */
-            border-radius: 0.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.1);
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
+
+        .comic-page-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(99, 102, 241, 0.2);
+        }
+
         /* Styles for interactive buttons and dropdowns */
         .control-button {
-            @apply px-4 py-2 font-bold rounded-full transition duration-150 ease-in-out whitespace-nowrap;
-            @apply bg-gray-700 text-white hover:bg-gray-600 active:bg-gray-500 shadow-xl;
+            @apply px-6 py-3 font-semibold rounded-xl transition-all duration-300 whitespace-nowrap;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            box-shadow: 0 0 10px #ec4899, 0 0 20px #8b5cf6;
+            border: none;
+            text-shadow: 0 0 5px rgba(236, 72, 153, 0.7);
+            cursor: pointer;
+            user-select: none;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        .control-button:hover {
+            background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+            box-shadow: 0 0 15px #ec4899, 0 0 30px #8b5cf6;
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .control-button:active {
+            transform: translateY(0) scale(0.95);
+            box-shadow: 0 0 8px #ec4899, 0 0 15px #8b5cf6;
+        }
+
+        .control-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(80%);
+            box-shadow: none;
+            transform: none;
+        }
+
         .chapter-select {
-             @apply p-2 bg-gray-800 text-white rounded-lg border border-gray-600 cursor-pointer w-48 transition duration-150 ease-in-out;
-             @apply focus:ring-2 focus:ring-purple-500 focus:border-purple-500;
+            @apply p-3 rounded-xl cursor-pointer w-56 transition-all duration-300;
+            background-color: #1e293b; /* dark slate background */
+            color: #e2e8f0; /* light text */
+            border: 1px solid #6366f1; /* indigo border */
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+            user-select: none;
+            appearance: none; /* Remove default arrow */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg fill='none' stroke='%23e2e8f0' stroke-width='2' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25em 1.25em;
         }
-        /* Key: Set the viewer wrapper to relative positioning for accurate height calculation and remove overflow:hidden
-           since we are now controlling height via JavaScript. */
+
+        .chapter-select:hover {
+            border-color: #ec4899;
+            box-shadow: 0 0 15px #ec4899;
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            background-image: url("data:image/svg+xml,%3Csvg fill='none' stroke='%23ffffff' stroke-width='2' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25em 1.25em;
+        }
+
+        /* Style dropdown options */
+        .chapter-select option {
+            background-color: #1e293b;
+            color: #e2e8f0;
+        }
+
+        /* Key: Set the viewer wrapper to relative positioning for accurate height calculation */
         #viewerWrapper {
-            position: relative; 
-            /* Min-height prevents it from collapsing to 0 before content loads */
+            position: relative;
             min-height: 100px;
-            /* Transition helps smooth out the height changes on zoom */
-            transition: height 0.15s ease-out; 
+            transition: height 0.15s ease-out;
+        }
+
+        /* Loading indicator enhancement */
+        #loadingMessage {
+            backdrop-filter: blur(5px);
+        }
+
+        #loadingMessage .animate-spin {
+            border-color: #6366f1;
+            border-top-color: transparent;
+        }
+
+        /* Fixed zoom controls styling */
+        #fixedZoomControls .control-button {
+            @apply px-4 py-2;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        #fixedZoomControls .control-button:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        /* New styles for added features */
+        .page-counter {
+            @apply text-sm text-slate-400;
+            font-weight: 500;
+        }
+
+        .fullscreen-btn {
+            @apply px-4 py-2 font-semibold rounded-xl transition-all duration-200;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+        }
+
+        .fullscreen-btn:hover {
+            background: linear-gradient(135deg, #047857 0%, #059669 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(71, 85, 105, 0.5);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .chapter-select {
+                width: 100%;
+                max-width: 200px;
+            }
+
+            .control-button {
+                @apply px-4 py-2 text-sm;
+            }
         }
     </style>
 </head>
@@ -105,19 +247,27 @@
 
             <!-- CBZ Navigation (Center: PREV, Dropdown, NEXT) -->
             <div id="cbzNavigation" class="flex items-center space-x-3 invisible">
-                <button id="prevCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>PREV CBZ</button>
+                <button id="prevCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>&#8592; PREV CBZ</button>
                 <select id="chapterSelectBottom" class="chapter-select"></select>
-                <button id="nextCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>NEXT CBZ</button>
+                <button id="nextCbzBtn" class="control-button bg-blue-700 hover:bg-blue-600" disabled>NEXT CBZ &#8594;</button>
             </div>
         </div>
     </footer>
 
-    <!-- Fixed Zoom Controls (New Element for always-visible zoom buttons) -->
-    <div id="fixedZoomControls" class="fixed bottom-4 left-4 z-40">
-        <div id="zoomControls" class="flex space-x-3">
-            <button id="zoomOutBtn" class="control-button text-2xl" disabled>-</button>
-            <button id="zoomInBtn" class="control-button text-2xl" disabled>+</button>
+        <!-- Fixed Zoom Controls (New Element for always-visible zoom buttons) -->
+        <div id="fixedZoomControls" class="fixed bottom-4 left-4 z-40 flex items-center space-x-4 bg-black/70 backdrop-blur-md rounded-xl p-2 shadow-lg">
+            <div id="zoomControls" class="flex space-x-3 items-center">
+                <button id="zoomOutBtn" class="control-button text-2xl" disabled>-</button>
+                <span id="zoomPercentage" class="text-white font-semibold select-none w-12 text-center">100%</span>
+                <button id="zoomInBtn" class="control-button text-2xl" disabled>+</button>
+            </div>
+            <button id="fullscreenBtn" class="fullscreen-btn" title="Toggle Fullscreen">Fullscreen</button>
+            <div class="page-counter" id="pageCounter" aria-live="polite" aria-atomic="true">Page 0 of 0</div>
         </div>
+
+    <!-- Progress Bar -->
+    <div id="progressBarContainer" class="fixed top-0 left-0 w-full h-1 bg-gray-700 z-50 hidden">
+        <div id="progressBarFill" class="progress-fill"></div>
     </div>
 
     <script>
@@ -125,21 +275,23 @@
         let allCbzFiles = []; // Array of File objects selected by the user
         let cbzIndex = -1;     // Index of the currently loaded CBZ file
         let cbzPages = [];    // Array of base64 data URLs for the current CBZ
-        let zoomLevel = 1.0;  // Current zoom scale factor (1.0 = 100%)
+        let zoomLevel = parseFloat(localStorage.getItem('cbzViewerZoom')) || 1.0;  // Current zoom scale factor (1.0 = 100%)
         let unscaledContentHeight = 0; // Stores the height of content at zoomLevel 1.0
+        let currentPage = 1;  // Current page being viewed (1-based)
 
         // --- DOM Elements ---
         const fileInput = document.getElementById('fileInput');
         const loadingMessage = document.getElementById('loadingMessage');
         const initialMessage = document.getElementById('initialMessage');
-        const viewerArea = document.getElementById('viewerArea'); 
-        const viewerContent = document.getElementById('viewerContent'); 
+        const viewerArea = document.getElementById('viewerArea');
+        const viewerContent = document.getElementById('viewerContent');
         const viewerWrapper = document.getElementById('viewerWrapper'); // Get the wrapper element
 
         // Zoom buttons are now in a fixed container, but the IDs remain the same
         const zoomInBtn = document.getElementById('zoomInBtn');
         const zoomOutBtn = document.getElementById('zoomOutBtn');
-        
+        const zoomPercentage = document.getElementById('zoomPercentage');
+
         const prevCbzBtn = document.getElementById('prevCbzBtn');
         const nextCbzBtn = document.getElementById('nextCbzBtn');
         const cbzNavigation = document.getElementById('cbzNavigation');
@@ -147,9 +299,15 @@
         const chapterSelectTop = document.getElementById('chapterSelectTop');
         const chapterSelectBottom = document.getElementById('chapterSelectBottom');
         const chapterSelectTopContainer = document.getElementById('chapterSelectTopContainer');
-        
+
         const header = document.getElementById('header');
         const controls = document.getElementById('controls');
+
+        // New elements for added features
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const pageCounter = document.getElementById('pageCounter');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBarFill = document.getElementById('progressBarFill');
 
 
         // --- Utility Functions ---
@@ -179,6 +337,7 @@
             cbzIndex = -1;
             cbzPages = [];
             zoomLevel = 1.0;
+            localStorage.setItem('cbzViewerZoom', zoomLevel);
             unscaledContentHeight = 0;
 
             initialMessage.classList.remove('hidden');
@@ -186,7 +345,7 @@
             viewerContent.style.visibility = 'hidden';
             viewerWrapper.style.height = ''; // Reset wrapper height
             currentFileTitle.textContent = 'Please select your CBZ folder.';
-            
+
             // Disable all controls
             [zoomInBtn, zoomOutBtn, prevCbzBtn, nextCbzBtn].forEach(btn => btn.disabled = true);
             cbzNavigation.classList.add('invisible');
@@ -247,6 +406,11 @@
         function applyZoom() {
             // Apply scale transformation to the inner content container
             viewerContent.style.transform = `scale(${zoomLevel})`;
+
+            // Update zoom percentage display
+            if (zoomPercentage) {
+                zoomPercentage.textContent = Math.round(zoomLevel * 100) + '%';
+            }
             
             // CRITICAL FIX: Update the container's layout height to match the visual scale.
             if (cbzPages.length > 0) {
@@ -285,10 +449,10 @@
                 // Show controls if at least one file is loaded
                 cbzNavigation.classList.remove('invisible');
                 chapterSelectTopContainer.classList.remove('invisible');
-                
+
                 // Add padding to viewerArea so the comic content isn't flush with the header/footer scroll position
-                viewerArea.classList.add('pt-4', 'pb-4'); 
-                
+                viewerArea.classList.add('pt-4', 'pb-4');
+
                 // If only one file, disable PREV/NEXT buttons
                 if (allCbzFiles.length === 1) {
                     prevCbzBtn.disabled = true;
@@ -301,7 +465,7 @@
             } else {
                 cbzNavigation.classList.add('invisible');
                 chapterSelectTopContainer.classList.add('invisible');
-                viewerArea.classList.remove('pt-4', 'pb-4'); 
+                viewerArea.classList.remove('pt-4', 'pb-4');
             }
 
             // Sync dropdowns to current file
@@ -309,6 +473,89 @@
                 chapterSelectTop.value = cbzIndex;
                 chapterSelectBottom.value = cbzIndex;
             }
+
+            // Update page counter
+            updatePageCounter();
+        }
+
+        /**
+         * Updates the page counter display.
+         * @param {number} page - The current page number (1-based).
+         */
+        function updatePageCounter(page = currentPage) {
+            if (cbzPages.length > 0) {
+                pageCounter.textContent = `Page ${page} of ${cbzPages.length}`;
+            } else {
+                pageCounter.textContent = 'Page 0 of 0';
+            }
+        }
+
+        /**
+         * Calculates the current page based on scroll position.
+         */
+        function updateCurrentPageFromScroll() {
+            if (cbzPages.length === 0) return;
+
+            const images = viewerContent.querySelectorAll('img');
+            if (images.length === 0) return;
+
+            const scrollY = window.scrollY;
+            const windowHeight = window.innerHeight;
+            const centerY = scrollY + windowHeight / 2;
+
+            let currentPageIndex = 0;
+            for (let i = 0; i < images.length; i++) {
+                const img = images[i];
+                const imgTop = img.offsetTop * zoomLevel;
+                const imgBottom = (img.offsetTop + img.offsetHeight) * zoomLevel;
+
+                if (centerY >= imgTop && centerY <= imgBottom) {
+                    currentPageIndex = i;
+                    break;
+                } else if (centerY < imgTop) {
+                    currentPageIndex = Math.max(0, i - 1);
+                    break;
+                }
+            }
+
+            currentPage = currentPageIndex + 1; // 1-based
+            updatePageCounter(currentPage);
+        }
+
+        /**
+         * Toggles fullscreen mode.
+         */
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        /**
+         * Updates the progress bar during loading.
+         * @param {number} progress - Progress value between 0 and 1.
+         */
+        function updateProgressBar(progress) {
+            progressBarFill.style.width = `${progress * 100}%`;
+        }
+
+        /**
+         * Shows the progress bar.
+         */
+        function showProgressBar() {
+            progressBarContainer.classList.remove('hidden');
+            updateProgressBar(0);
+        }
+
+        /**
+         * Hides the progress bar.
+         */
+        function hideProgressBar() {
+            progressBarContainer.classList.add('hidden');
         }
 
         // --- Core Application Logic ---
@@ -332,7 +579,8 @@
          */
         function updateZoom(factor) {
             // Limit zoom between 20% and 300%
-            zoomLevel = Math.max(0.2, Math.min(3.0, zoomLevel + factor)); 
+            zoomLevel = Math.max(0.2, Math.min(3.0, zoomLevel + factor));
+            localStorage.setItem('cbzViewerZoom', zoomLevel);
             applyZoom();
         }
 
@@ -345,8 +593,9 @@
 
             cbzIndex = index;
             const file = allCbzFiles[cbzIndex];
-            
+
             showLoading(`Reading ${file.name}...`);
+            showProgressBar();
             currentFileTitle.textContent = file.name;
             viewerContent.innerHTML = ''; // Clear previous images
             viewerContent.style.visibility = 'hidden';
@@ -355,20 +604,25 @@
 
             try {
                 // 1. Load the CBZ file using JSZip
+                updateProgressBar(0.1);
                 const zip = await JSZip.loadAsync(file);
+                updateProgressBar(0.3);
                 const pagePromises = [];
 
                 // 2. Filter and sort image entries numerically
                 const imageEntries = Object.keys(zip.files)
                     .filter(filename => !zip.files[filename].dir && getMimeType(filename))
-                    .sort(sortStringsNumerically); 
+                    .sort(sortStringsNumerically);
 
                 if (imageEntries.length === 0) {
                     throw new Error("No readable image files found in this CBZ.");
                 }
 
+                updateProgressBar(0.4);
+
                 // 3. Extract all images as Data URLs concurrently
-                for (const filename of imageEntries) {
+                for (let i = 0; i < imageEntries.length; i++) {
+                    const filename = imageEntries[i];
                     const mimeType = getMimeType(filename);
                     if (mimeType) {
                         pagePromises.push(zip.files[filename].async("blob").then(blob => {
@@ -379,9 +633,11 @@
                             });
                         }));
                     }
+                    updateProgressBar(0.4 + (i / imageEntries.length) * 0.3);
                 }
 
                 cbzPages = await Promise.all(pagePromises);
+                updateProgressBar(0.7);
 
                 // 4. Insert all pages into the long strip container
                 let imageLoadPromises = [];
@@ -389,30 +645,39 @@
                     const img = document.createElement('img');
                     img.src = dataUrl;
                     img.alt = `Page ${i + 1}`;
-                    img.classList.add('w-full', 'comic-page-image'); 
+                    img.classList.add('w-full', 'comic-page-image');
                     viewerContent.appendChild(img);
-                    
+
                     // Wait for all images to fully load before calculating height
                     imageLoadPromises.push(new Promise(resolve => {
-                        img.onload = resolve;
-                        img.onerror = resolve; // Resolve even on error to prevent being stuck
+                        img.onload = () => {
+                            updateProgressBar(0.7 + ((i + 1) / cbzPages.length) * 0.2);
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            updateProgressBar(0.7 + ((i + 1) / cbzPages.length) * 0.2);
+                            resolve(); // Resolve even on error to prevent being stuck
+                        };
                     }));
                 });
-                
+
                 // Wait for all images to load
                 await Promise.all(imageLoadPromises);
-                
+                updateProgressBar(0.9);
+
                 // Calculate and store the true unscaled height after all images are in the DOM and loaded
                 // We temporarily set zoom to 1.0 to get the true scrollHeight
                 viewerContent.style.transform = 'scale(1.0)';
                 // Get the total height of all content (scrollHeight)
-                unscaledContentHeight = viewerContent.scrollHeight; 
+                unscaledContentHeight = viewerContent.scrollHeight;
 
-                // 5. Reset zoom and update UI
-                zoomLevel = 1.0;
-                applyZoom(); // This now calls updateContainerHeight to set the wrapper's height
-                viewerContent.style.visibility = 'visible';
-                updateUIControls();
+            // 5. Reset zoom and update UI
+            // Removed resetting zoomLevel to 1.0 to keep persistent zoom
+            currentPage = 1; // Reset to first page
+            applyZoom(); // This now calls updateContainerHeight to set the wrapper's height
+            viewerContent.style.visibility = 'visible';
+            updateUIControls();
+            updateProgressBar(1.0);
 
             } catch (error) {
                 currentFileTitle.textContent = `Error loading ${file.name}: ${error.message}`;
@@ -423,6 +688,7 @@
 
             } finally {
                 hideLoading();
+                hideProgressBar();
             }
         }
 
@@ -480,6 +746,51 @@
         // Zoom controls
         zoomInBtn.addEventListener('click', () => updateZoom(0.1));
         zoomOutBtn.addEventListener('click', () => updateZoom(-0.1));
+
+        // Fullscreen button
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Prevent default behavior for our shortcuts
+            switch (e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    navigateCbz(-1); // Previous CBZ
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    navigateCbz(1); // Next CBZ
+                    break;
+                case '+':
+                case '=':
+                    e.preventDefault();
+                    updateZoom(0.1); // Zoom in
+                    break;
+                case '-':
+                    e.preventDefault();
+                    updateZoom(-0.1); // Zoom out
+                    break;
+                case 'f':
+                case 'F':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        toggleFullscreen(); // Toggle fullscreen
+                    }
+                    break;
+                case '0':
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        zoomLevel = 1.0; // Reset zoom
+                        localStorage.setItem('cbzViewerZoom', zoomLevel);
+                        applyZoom();
+                    }
+                    break;
+            }
+        });
+
+        // Scroll event listener to update page counter
+        window.addEventListener('scroll', updateCurrentPageFromScroll);
 
         // Initial setup
         resetViewer();
